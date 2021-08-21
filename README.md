@@ -9,10 +9,9 @@ The Tag langauge takes this further, creating an expression language inside stru
 The following analogies generally explain how Tag works:
 
 * Structs are functions
-* Fields are variables
+* Fields are local variables
 * Field types are statements, control flow and function calls
-* Struct field tags are expressions
-
+* Struct field tags are expressions in a made up new expression language
 This program:
 
 ```go
