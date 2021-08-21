@@ -11,14 +11,14 @@ import (
 )
 
 type Color struct {
-	R int `λ:"_0%4"`
-	G int `λ:"_1%4"`
-	B int `λ:"_2%4"`
+	R     int         `λ:"_0%256"`
+	G     int         `λ:"_1%256"`
+	B     int         `λ:"_2%256"`
+	NRGBA color.NRGBA `λ:"R,G,B,255"`
 }
 
 type Image struct {
-	Colors [256][256]Color       `λ:"__0+__1,__0,__1"`
-	Pixels [256][256]color.NRGBA `λ:"__0+__1,__0,__1,255"`
+	Colors [256][256]Color `λ:"__0+__1,__0,__1"`
 }
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 	img := image.NewNRGBA(image.Rect(0, 0, 256, 256))
 	for y := 0; y < 256; y++ {
 		for x := 0; x < 256; x++ {
-			img.Set(x, y, res.(Image).Pixels[x][y])
+			img.Set(x, y, res.(Image).Colors[x][y].NRGBA)
 		}
 	}
 	f, err := os.Create("image.png")

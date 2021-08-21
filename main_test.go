@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,4 +14,10 @@ func TestBasic(t *testing.T) {
 	assert.IsType(t, expr, &Call{})
 	assert.IsType(t, (*(expr.(*Call))).Func, &Identifier{})
 	assert.Len(t, (*(expr.(*Call))).Args, 3)
+}
+
+func TestImage(t *testing.T) {
+	res, err := EvalStruct(reflect.TypeOf(Image{}), []interface{}{})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
 }

@@ -60,42 +60,40 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 }
 
 func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
-	for {
-		switch ty.Kind() {
-		// An array is a `for i:=0i<n;i++ { ... }`
-		case reflect.Array:
-			var ret []interface{}
-			for i := 0; i < ty.Len(); i++ {
-				ev.scope[fmt.Sprintf("__%d", depth)] = i
-				v, err := EvalType(ev, expr, ty.Elem(), depth+1)
-				if err != nil {
-					return nil, err
-				}
-				ret = append(ret, v)
-			}
-			return ret, nil
-		// An struct is a `foo(...)`
-		case reflect.Struct:
-			v, err := ev.Eval(expr)
+	switch ty.Kind() {
+	// An array is a `for i:=0i<n;i++ { ... }`
+	case reflect.Array:
+		var ret []interface{}
+		for i := 0; i < ty.Len(); i++ {
+			ev.scope[fmt.Sprintf("__%d", depth)] = i
+			v, err := EvalType(ev, expr, ty.Elem(), depth+1)
 			if err != nil {
 				return nil, err
 			}
-			arrV, ok := v.([]interface{})
-			if !ok {
-				arrV = []interface{}{v}
-			}
-			return EvalStruct(ty, arrV)
-		// An int is a `(...).(int)`
-		case reflect.Int, reflect.Uint8:
-			v, err := ev.Eval(expr)
-			if err != nil {
-				return nil, err
-			}
-			i := reflect.ValueOf(v).Convert(ty).Interface()
-			return i, err
-		default:
-			panic(fmt.Sprintf("nyi - eval type %s", ty.Kind()))
+			ret = append(ret, v)
 		}
+		return ret, nil
+	// An struct is a `foo(...)`
+	case reflect.Struct:
+		v, err := ev.Eval(expr)
+		if err != nil {
+			return nil, err
+		}
+		arrV, ok := v.([]interface{})
+		if !ok {
+			arrV = []interface{}{v}
+		}
+		return EvalStruct(ty, arrV)
+	// An int is a `(...).(int)`
+	case reflect.Int, reflect.Uint8:
+		v, err := ev.Eval(expr)
+		if err != nil {
+			return nil, err
+		}
+		i := reflect.ValueOf(v).Convert(ty).Interface()
+		return i, err
+	default:
+		panic(fmt.Sprintf("nyi - eval type %s", ty.Kind()))
 	}
 }
 
@@ -116,8 +114,13 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 		}
 
 		ev := NewEvaluator()
+		// All args are in scope
 		for i, a := range args {
 			ev.scope[fmt.Sprintf("_%d", i)] = a
+		}
+		// Also, all struct fields before this one
+		for j := 0; j < i; j++ {
+			ev.scope[ty.Field(j).Name] = val.Field(j).Interface()
 		}
 		v, err := EvalType(ev, expr, field.Type, 0)
 		if err != nil {
