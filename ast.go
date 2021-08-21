@@ -8,6 +8,7 @@ const (
 	BinaryOperatorExpression ExpressionKind = "BinaryOperator"
 	IdentifierExpression     ExpressionKind = "Identifier"
 	TupleExpression          ExpressionKind = "Tuple"
+	LookupExpression         ExpressionKind = "Lookup"
 )
 
 type Expression interface {
@@ -46,3 +47,10 @@ type Tuple struct {
 }
 
 func (*Tuple) Kind() ExpressionKind { return TupleExpression }
+
+type Lookup struct {
+	Base     Expression
+	Property Token
+}
+
+func (*Lookup) Kind() ExpressionKind { return LookupExpression }

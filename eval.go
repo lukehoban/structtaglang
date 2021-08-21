@@ -36,9 +36,11 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 		case "%":
 			return left.(int) % right.(int), nil
 		case "+":
-			return left.(int) + right.(int), nil
+			return floatOrIntBinop("+", left, right, func(x, y int) interface{} { return x + y }, func(x, y float64) interface{} { return x + y })
 		case "*":
-			return left.(int) * right.(int), nil
+			return floatOrIntBinop("*", left, right, func(x, y int) interface{} { return x * y }, func(x, y float64) interface{} { return x * y })
+		case "-":
+			return floatOrIntBinop("-", left, right, func(x, y int) interface{} { return x - y }, func(x, y float64) interface{} { return x - y })
 		default:
 			panic(fmt.Sprintf("nyi - operator %s", ex.Tok.String))
 		}
@@ -54,6 +56,12 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 			ret = append(ret, i)
 		}
 		return ret, nil
+	case *Lookup:
+		x, err := ev.Eval(ex.Base)
+		if err != nil {
+			return nil, err
+		}
+		return reflect.ValueOf(x).FieldByName(ex.Property.String).Interface(), nil
 	case *Call:
 		panic("nyi - eval call")
 	default:
@@ -61,7 +69,25 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 	}
 }
 
+func floatOrIntBinop(op string, left, right interface{}, fint func(int, int) interface{}, ffloat func(float64, float64) interface{}) (interface{}, error) {
+	leftFloat, isLeftFloat := left.(float64)
+	rightFloat, isRightFloat := right.(float64)
+	leftInt, isLeftInt := left.(int)
+	rightInt, isRightInt := right.(int)
+	if isLeftFloat && isRightFloat {
+		return ffloat(leftFloat, rightFloat), nil
+	} else if isLeftFloat && isRightInt {
+		return ffloat(leftFloat, float64(rightInt)), nil
+	} else if isLeftInt && isRightFloat {
+		return ffloat(float64(leftInt), rightFloat), nil
+	} else if isLeftInt && isRightInt {
+		return fint(leftInt, rightInt), nil
+	}
+	panic(fmt.Sprintf("not yet implemented %v %s %v", reflect.TypeOf(left), op, reflect.TypeOf(right)))
+}
+
 func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
+	// fmt.Printf("Eval(%v) to %v\n", expr, ty)
 	switch ty.Kind() {
 	// An array is a `for i:=0i<n;i++ { ... }`
 	case reflect.Array:
@@ -87,7 +113,7 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 		}
 		return EvalStruct(ty, arrV)
 	// An int is a `(...).(int)`
-	case reflect.Int, reflect.Uint8:
+	case reflect.Int, reflect.Uint8, reflect.Float64:
 		v, err := ev.Eval(expr)
 		if err != nil {
 			return nil, err
@@ -138,7 +164,7 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 func Set(dest reflect.Value, val reflect.Value) {
 	dt := dest.Type()
 	switch dt.Kind() {
-	case reflect.Int, reflect.Uint8:
+	case reflect.Int, reflect.Uint8, reflect.Float64:
 		dest.Set(val)
 	case reflect.Array:
 		arrVal := reflect.ValueOf(val.Interface())

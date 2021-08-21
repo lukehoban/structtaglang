@@ -88,13 +88,13 @@ func (p *Parser) ParseTupleExpressiion(first Expression) (Expression, error) {
 }
 
 func (p *Parser) ParseBasicExpression() (Expression, error) {
-	expr, err := p.ParseSimpleExpression()
+	expr, err := p.ParsePathExpression()
 	if err != nil {
 		return nil, err
 	}
 	tok := p.Peek(0)
 	switch tok.String {
-	case "+", "%", "*":
+	case "+", "%", "*", "-":
 		p.Skip(1)
 		right, err := p.ParseBasicExpression()
 		if err != nil {
@@ -125,6 +125,27 @@ func (p *Parser) ParseBasicExpression() (Expression, error) {
 	return expr, nil
 }
 
+func (p *Parser) ParsePathExpression() (Expression, error) {
+	expr, err := p.ParseSimpleExpression()
+	if err != nil {
+		return nil, err
+	}
+	tok := p.Peek(0)
+	switch tok.String {
+	case ".":
+		p.Skip(1)
+		idTok := p.Take()
+		if idTok.Kind != scanner.Ident {
+			panic(fmt.Sprintf("nyi - non-identifier after .: %v", idTok))
+		}
+
+		expr = &Lookup{Base: expr, Property: idTok}
+	case "[":
+		panic("nyi - `foo['bar'] syntax")
+	}
+	return expr, nil
+}
+
 func (p *Parser) ParseSimpleExpression() (Expression, error) {
 	tok := p.Take()
 	switch tok.Kind {
@@ -136,6 +157,12 @@ func (p *Parser) ParseSimpleExpression() (Expression, error) {
 			return nil, err
 		}
 		return &Literal{Value: i}, nil
+	case scanner.Float:
+		f, err := strconv.ParseFloat(tok.String, 64)
+		if err != nil {
+			return nil, err
+		}
+		return &Literal{Value: f}, nil
 	case '(':
 		expr, err := p.ParseExpression()
 		if err != nil {
