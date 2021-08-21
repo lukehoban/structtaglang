@@ -265,6 +265,7 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
 	for {
 		switch ty.Kind() {
+		// An array is a `for i:=0i<n;i++ { ... }`
 		case reflect.Array:
 			var ret []interface{}
 			for i := 0; i < ty.Len(); i++ {
@@ -276,6 +277,7 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 				ret = append(ret, v)
 			}
 			return ret, nil
+		// An struct is a `foo(...)`
 		case reflect.Struct:
 			v, err := ev.Eval(expr)
 			if err != nil {
@@ -285,36 +287,77 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 			if !ok {
 				arrV = []interface{}{v}
 			}
-			val := reflect.New(ty).Elem()
-			for i := 0; i < ty.NumField(); i++ {
-				x := reflect.ValueOf(arrV[i])
-				val.Field(i).Set(x)
+			return EvalStruct(ty, arrV)
+		// An int is a `(...).(int)`
+		case reflect.Int:
+			v, err := ev.Eval(expr)
+			if err != nil {
+				return nil, err
 			}
-			return val, nil
+			i, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("cannot convert %v to int", reflect.TypeOf(v))
+			}
+			return i, err
 		default:
 			panic(fmt.Sprintf("nyi - eval type %s", ty.Kind()))
 		}
 	}
 }
 
-func StructTagLang(v interface{}) error {
-	t := reflect.TypeOf(v)
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
+	val := reflect.New(ty).Elem()
+	for i := 0; i < ty.NumField(); i++ {
+		field := ty.Field(i)
 		tag := field.Tag.Get("λ")
-		parser := NewParser(tag, fmt.Sprintf("%s.%s", t.Name(), field.Name))
+		parser := NewParser(tag, fmt.Sprintf("%s.%s", ty.Name(), field.Name))
 		expr, err := parser.ParseExpression()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		ev := NewEvaluator()
+		for i, a := range args {
+			ev.scope[fmt.Sprintf("_%d", i)] = a
+		}
 		v, err := EvalType(ev, expr, field.Type, 0)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		fmt.Printf("%v\n", v)
+
+		x := reflect.ValueOf(v)
+		Set(val.Field(i), x)
 	}
+	return val.Interface(), nil
+}
+
+func Set(dest reflect.Value, val reflect.Value) {
+	dt := dest.Type()
+	switch dt.Kind() {
+	case reflect.Int:
+		dest.Set(val)
+	case reflect.Array:
+		arrVal := reflect.ValueOf(val.Interface())
+		for i := 0; i < dt.Len(); i++ {
+			Set(dest.Index(i), arrVal.Index(i))
+		}
+	case reflect.Struct:
+		structVal := reflect.ValueOf(val.Interface())
+		for i := 0; i < dt.NumField(); i++ {
+			dest.Field(i).Set(structVal.Field(i))
+		}
+	default:
+		panic(fmt.Sprintf("nyi - set %s", dt.Kind()))
+	}
+}
+
+func StructTagLang(v interface{}) error {
+	t := reflect.TypeOf(v)
+	res, err := EvalStruct(t, []interface{}{})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%v %v\n", reflect.TypeOf(res), res)
 	return nil
 }
 
