@@ -9,16 +9,14 @@ import (
 )
 
 type Color struct {
-	R int `plus:""`
-	G int `plus:""`
-	B int `plus:""`
+	R int `λ:"_0"`
+	G int `λ:"_1"`
+	B int `λ:"_2"`
 }
 
 type Image struct {
-	pixels [10][10]Color `init:"(_+__)%256,_%256,__%256"`
+	Pixels [10][10]Color `λ:"(__0+__1)%256,__0%256,__1%256"`
 }
-
-const tagName = "init"
 
 type ExpressionKind string
 
@@ -85,7 +83,6 @@ func NewParser(src string, name string) Parser {
 	parser := Parser{}
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
 		parser.Tokens = append(parser.Tokens, Token{Kind: tok, String: s.TokenText(), Position: s.Pos()})
-		fmt.Printf("%s: %d %s\n", s.Position, tok, s.TokenText())
 	}
 	return parser
 }
@@ -224,7 +221,11 @@ func NewEvaluator() *Evaluator {
 func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 	switch ex := expr.(type) {
 	case *Identifier:
-		return ev.scope[ex.Tok.String], nil
+		v, ok := ev.scope[ex.Tok.String]
+		if !ok {
+			return nil, fmt.Errorf("no %q in scope", ex.Tok.String)
+		}
+		return v, nil
 	case *BinaryOperator:
 		left, err := ev.Eval(ex.Left)
 		if err != nil {
@@ -265,10 +266,9 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 	for {
 		switch ty.Kind() {
 		case reflect.Array:
-			fmt.Printf("len=%d, ty=%v\n", ty.Len(), ty.Elem())
 			var ret []interface{}
 			for i := 0; i < ty.Len(); i++ {
-				ev.scope[strings.Repeat("_", depth+1)] = i
+				ev.scope[fmt.Sprintf("__%d", depth)] = i
 				v, err := EvalType(ev, expr, ty.Elem(), depth+1)
 				if err != nil {
 					return nil, err
@@ -301,7 +301,7 @@ func StructTagLang(v interface{}) error {
 	t := reflect.TypeOf(v)
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		tag := field.Tag.Get(tagName)
+		tag := field.Tag.Get("λ")
 		parser := NewParser(tag, fmt.Sprintf("%s.%s", t.Name(), field.Name))
 		expr, err := parser.ParseExpression()
 		if err != nil {
