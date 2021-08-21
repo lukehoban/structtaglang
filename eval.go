@@ -86,15 +86,12 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 			}
 			return EvalStruct(ty, arrV)
 		// An int is a `(...).(int)`
-		case reflect.Int:
+		case reflect.Int, reflect.Uint8:
 			v, err := ev.Eval(expr)
 			if err != nil {
 				return nil, err
 			}
-			i, ok := v.(int)
-			if !ok {
-				return nil, fmt.Errorf("cannot convert %v to int", reflect.TypeOf(v))
-			}
+			i := reflect.ValueOf(v).Convert(ty).Interface()
 			return i, err
 		default:
 			panic(fmt.Sprintf("nyi - eval type %s", ty.Kind()))
@@ -107,6 +104,11 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 	for i := 0; i < ty.NumField(); i++ {
 		field := ty.Field(i)
 		tag := field.Tag.Get("λ")
+		if tag == "" {
+			// If there is no tag, implicitly pass the i'th argument to the i'th struct field.  This ensures
+			// that external struct types can also be used as constructors with positional arguments.
+			tag = fmt.Sprintf("_%d", i)
+		}
 		parser := NewParser(tag, fmt.Sprintf("%s.%s", ty.Name(), field.Name))
 		expr, err := parser.ParseExpression()
 		if err != nil {
@@ -131,7 +133,7 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 func Set(dest reflect.Value, val reflect.Value) {
 	dt := dest.Type()
 	switch dt.Kind() {
-	case reflect.Int:
+	case reflect.Int, reflect.Uint8:
 		dest.Set(val)
 	case reflect.Array:
 		arrVal := reflect.ValueOf(val.Interface())
