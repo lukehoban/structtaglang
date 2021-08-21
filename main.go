@@ -261,7 +261,7 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 	}
 }
 
-func EvalField(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
+func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
 	for {
 		switch ty.Kind() {
 		case reflect.Array:
@@ -269,15 +269,30 @@ func EvalField(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inte
 			var ret []interface{}
 			for i := 0; i < ty.Len(); i++ {
 				ev.scope[strings.Repeat("_", depth+1)] = i
-				v, err := EvalField(ev, expr, ty.Elem(), depth+1)
+				v, err := EvalType(ev, expr, ty.Elem(), depth+1)
 				if err != nil {
 					return nil, err
 				}
 				ret = append(ret, v)
 			}
 			return ret, nil
+		case reflect.Struct:
+			v, err := ev.Eval(expr)
+			if err != nil {
+				return nil, err
+			}
+			arrV, ok := v.([]interface{})
+			if !ok {
+				arrV = []interface{}{v}
+			}
+			val := reflect.New(ty).Elem()
+			for i := 0; i < ty.NumField(); i++ {
+				x := reflect.ValueOf(arrV[i])
+				val.Field(i).Set(x)
+			}
+			return val, nil
 		default:
-			return ev.Eval(expr)
+			panic(fmt.Sprintf("nyi - eval type %s", ty.Kind()))
 		}
 	}
 }
@@ -294,7 +309,7 @@ func StructTagLang(v interface{}) error {
 		}
 
 		ev := NewEvaluator()
-		v, err := EvalField(ev, expr, field.Type, 0)
+		v, err := EvalType(ev, expr, field.Type, 0)
 		if err != nil {
 			return err
 		}
