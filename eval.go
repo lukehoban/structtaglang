@@ -37,6 +37,8 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 			return left.(int) % right.(int), nil
 		case "+":
 			return left.(int) + right.(int), nil
+		case "*":
+			return left.(int) * right.(int), nil
 		default:
 			panic(fmt.Sprintf("nyi - operator %s", ex.Tok.String))
 		}

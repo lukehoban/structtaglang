@@ -18,7 +18,7 @@ type Color struct {
 }
 
 type Image struct {
-	Colors [256][256]Color `λ:"__0+__1,__0,__1"`
+	Colors [256][256]Color `λ:"__0+__1,(__0+__1)*2,(__0+__1)*4"`
 }
 
 func main() {
