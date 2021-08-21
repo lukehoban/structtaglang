@@ -29,7 +29,7 @@ type Vector struct {
 }
 
 type VectorTimes struct {
-	Vector Vector `λ:"_0.X*_1,_0.Y*_1,_0.Z*_1"`
+	Vector `λ:"_0.X*_1,_0.Y*_1,_0.Z*_1"`
 }
 
 type VectorPlus struct {
@@ -41,8 +41,9 @@ type TracePixel struct {
 	RecenterY      float64     `λ:"(_2-128.0)/512"`
 	Right          VectorTimes `λ:"_0.Right,RecenterX"`
 	Up             VectorTimes `λ:"_0.Up,RecenterY"`
-	RightUp        VectorPlus  `λ:"Up.Vector,Right.Vector"`
+	RightUp        VectorPlus  `λ:"Up,Right"`
 	RightUpForward VectorPlus  `λ:"RightUp.Vector,_0.Forward"`
+	// TODO: Create ray and trace it
 }
 
 type Raytracer struct {
@@ -67,4 +68,7 @@ func TestRaytracer(t *testing.T) {
 	res, err := EvalStruct(reflect.TypeOf(Main{}), []interface{}{nil})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
+	assert.Equal(t, 1.0, res.(Main).Raytracer.Pixels[0][0].RightUpForward.Vector.X)
+	assert.Equal(t, 128.0, res.(Main).Raytracer.Pixels[0][0].RightUpForward.Vector.Y)
+	assert.Equal(t, -128.0, res.(Main).Raytracer.Pixels[0][0].RightUpForward.Vector.Z)
 }
