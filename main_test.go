@@ -14,8 +14,3 @@ func TestBasic(t *testing.T) {
 	assert.IsType(t, (*(expr.(*Call))).Func, &Identifier{})
 	assert.Len(t, (*(expr.(*Call))).Args, 3)
 }
-
-func TestImage(t *testing.T) {
-	err := StructTagLang(Image{})
-	assert.NoError(t, err)
-}
