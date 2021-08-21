@@ -15,7 +15,7 @@ type Color struct {
 }
 
 type Image struct {
-	pixels [600][600]Color `init:"Color((_+__)%256,_%256,__%256)"`
+	pixels [10][10]Color `init:"(_+__)%256,_%256,__%256"`
 }
 
 const tagName = "init"
@@ -27,6 +27,7 @@ const (
 	LiteralExpression        ExpressionKind = "Literal"
 	BinaryOperatorExpression ExpressionKind = "BinaryOperator"
 	IdentifierExpression     ExpressionKind = "Identifier"
+	TupleExpression          ExpressionKind = "Tuple"
 )
 
 type Expression interface {
@@ -59,6 +60,12 @@ type Identifier struct {
 }
 
 func (*Identifier) Kind() ExpressionKind { return IdentifierExpression }
+
+type Tuple struct {
+	Items []Expression
+}
+
+func (*Tuple) Kind() ExpressionKind { return TupleExpression }
 
 type Token struct {
 	Kind     rune
@@ -115,7 +122,33 @@ func (p *Parser) MustTake(t rune) error {
 	return nil
 }
 
-func (p *Parser) Parse() (Expression, error) {
+func (p *Parser) ParseExpression() (Expression, error) {
+	expr, err := p.ParseBasicExpression()
+	if err != nil {
+		return nil, err
+	}
+	tok := p.Peek(0)
+	switch tok.String {
+	case ",":
+		return p.ParseTupleExpressiion(expr)
+	}
+	return expr, nil
+}
+
+func (p *Parser) ParseTupleExpressiion(first Expression) (Expression, error) {
+	ret := []Expression{first}
+	for p.Peek(0).Kind == ',' {
+		p.Skip(1)
+		item, err := p.ParseBasicExpression()
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, item)
+	}
+	return &Tuple{Items: ret}, nil
+}
+
+func (p *Parser) ParseBasicExpression() (Expression, error) {
 	expr, err := p.ParseSimpleExpression()
 	if err != nil {
 		return nil, err
@@ -124,7 +157,7 @@ func (p *Parser) Parse() (Expression, error) {
 	switch tok.String {
 	case "+", "%":
 		p.Skip(1)
-		right, err := p.Parse()
+		right, err := p.ParseBasicExpression()
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +171,7 @@ func (p *Parser) Parse() (Expression, error) {
 			case ")":
 				break L
 			default:
-				argExpr, err := p.Parse()
+				argExpr, err := p.ParseBasicExpression()
 				if err != nil {
 					return nil, err
 				}
@@ -165,7 +198,7 @@ func (p *Parser) ParseSimpleExpression() (Expression, error) {
 		}
 		return &Literal{Value: i}, nil
 	case '(':
-		expr, err := p.Parse()
+		expr, err := p.ParseExpression()
 		if err != nil {
 			return nil, err
 		}
@@ -178,17 +211,94 @@ func (p *Parser) ParseSimpleExpression() (Expression, error) {
 	}
 }
 
+type Evaluator struct {
+	scope map[string]interface{}
+}
+
+func NewEvaluator() *Evaluator {
+	return &Evaluator{
+		scope: map[string]interface{}{},
+	}
+}
+
+func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
+	switch ex := expr.(type) {
+	case *Identifier:
+		return ev.scope[ex.Tok.String], nil
+	case *BinaryOperator:
+		left, err := ev.Eval(ex.Left)
+		if err != nil {
+			return nil, err
+		}
+		right, err := ev.Eval(ex.Right)
+		if err != nil {
+			return nil, err
+		}
+		switch ex.Tok.String {
+		case "%":
+			return left.(int) % right.(int), nil
+		case "+":
+			return left.(int) + right.(int), nil
+		default:
+			panic(fmt.Sprintf("nyi - operator %s", ex.Tok.String))
+		}
+	case *Literal:
+		return ex.Value, nil
+	case *Tuple:
+		var ret []interface{}
+		for _, item := range ex.Items {
+			i, err := ev.Eval(item)
+			if err != nil {
+				return nil, err
+			}
+			ret = append(ret, i)
+		}
+		return ret, nil
+	case *Call:
+		panic("nyi - eval call")
+	default:
+		panic(fmt.Sprintf("nyi - eval %s", expr.Kind()))
+	}
+}
+
+func EvalField(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
+	for {
+		switch ty.Kind() {
+		case reflect.Array:
+			fmt.Printf("len=%d, ty=%v\n", ty.Len(), ty.Elem())
+			var ret []interface{}
+			for i := 0; i < ty.Len(); i++ {
+				ev.scope[strings.Repeat("_", depth+1)] = i
+				v, err := EvalField(ev, expr, ty.Elem(), depth+1)
+				if err != nil {
+					return nil, err
+				}
+				ret = append(ret, v)
+			}
+			return ret, nil
+		default:
+			return ev.Eval(expr)
+		}
+	}
+}
+
 func StructTagLang(v interface{}) error {
 	t := reflect.TypeOf(v)
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		tag := field.Tag.Get(tagName)
 		parser := NewParser(tag, fmt.Sprintf("%s.%s", t.Name(), field.Name))
-		expr, err := parser.Parse()
+		expr, err := parser.ParseExpression()
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%v\n", expr)
+
+		ev := NewEvaluator()
+		v, err := EvalField(ev, expr, field.Type, 0)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%v\n", v)
 	}
 	return nil
 }
