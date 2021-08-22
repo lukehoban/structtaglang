@@ -40,6 +40,11 @@ type VectorPlus struct {
 	Vector `λ:"_0.X+_1.X,_0.Y+_1.Y,_0.Z+_1.Z"`
 }
 
+// VectorMinus(v1, v2)
+type VectorMinus struct {
+	Vector `λ:"_0.X-_1.X,_0.Y-_1.Y,_0.Z-_1.Z"`
+}
+
 // VectorDot(v1, v2)
 type VectorDot struct {
 	Value float64 `λ:"(_0.X*_1.X)+(_0.Y*_1.Y)+(_0.Z*_1.Z)"`
@@ -58,9 +63,28 @@ type Ray struct {
 	Dir   Vector `λ:"_1.X,_1.Y,_1.Z"`
 }
 
+// IntersectSphereDist(radius, eo, v)
+type IntersectSphereDist struct {
+	EODotEO VectorDot `λ:"_1,_1"`
+	Disc    float64   `λ:"(_0^2)-(EODotEO.Value-_2^2)"`
+	Value   *float64  `?:"0<Disc" λ:"_2-(Disc^0.5)"`
+}
+
+// IntersectSphere(ray)
+type IntersectSphere struct {
+	Center Vector               `λ:"0,0,0"`
+	Radius float64              `λ:"1"`
+	EO     VectorMinus          `λ:"Center,_0.Start"`
+	V      VectorDot            `λ:"EO,_0.Dir"`
+	VDist  *IntersectSphereDist `?:"0<V.Value" λ:"Radius,EO,V.Value"`
+	Dist0  *float64             `?:"VDist" λ:"VDist.Value?0"`
+	Dist   float64              `λ:"Dist0?0"`
+}
+
 // TraceRay(scene, ray, depth)
 type TraceRay struct {
-	TraceRay *TraceRay `?:"_2>0" λ:"_0,_1,_2-1"`
+	Isect    IntersectSphere `λ:"_1"`
+	TraceRay *TraceRay       `?:"_2>0" λ:"_0,_1,_2-1"` // Recursion!!!
 }
 
 // TracePixel(camera, x, y)
@@ -74,7 +98,6 @@ type TracePixel struct {
 	Point          VectorNorm  `λ:"RightUpForward"`
 	Ray            Ray         `λ:"_0.Pos,Point"`
 	Color          TraceRay    `λ:"Ray,_0,0"`
-	// TODO: Create ray and trace it
 }
 
 // Raytracer(camera)
@@ -98,6 +121,18 @@ type Main struct {
 	Forward   Vector    `λ:"1,0,0"`
 	Camera    Camera    `λ:"Up,Right,Forward"`
 	Raytracer Raytracer `λ:"Camera"`
+}
+
+func TestIntersectSphere(t *testing.T) {
+	res, err := EvalStruct(reflect.TypeOf(IntersectSphere{}), []interface{}{
+		Ray{
+			Start: Vector{-2, 0, 0},
+			Dir:   Vector{1, 0, 0},
+		},
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Equal(t, 1.0, res.(IntersectSphere).Dist)
 }
 
 func TestTraceRay(t *testing.T) {

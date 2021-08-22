@@ -34,6 +34,12 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 			return nil, err
 		}
 		switch ex.Tok.String {
+		case "?":
+			leftVal := reflect.ValueOf(left)
+			if !leftVal.IsNil() {
+				return leftVal.Elem().Interface(), nil
+			}
+			return right, nil
 		case "%":
 			return left.(int) % right.(int), nil
 		case "<":
@@ -81,7 +87,14 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return reflect.ValueOf(x).FieldByName(ex.Property.String).Interface(), nil
+		xval := reflect.ValueOf(x)
+		if xval.Kind() == reflect.Ptr {
+			if xval.IsNil() {
+				return nil, fmt.Errorf("lookup on nil receiver %v.%s", x, ex.Property.String)
+			}
+			xval = xval.Elem()
+		}
+		return xval.FieldByName(ex.Property.String).Interface(), nil
 	case *Call:
 		panic("nyi - eval call")
 	default:
@@ -107,7 +120,7 @@ func floatOrIntBinop(op string, left, right interface{}, fint func(int, int) int
 }
 
 func EvalType(ev *Evaluator, expr, ifExpr Expression, ty reflect.Type, depth int) (interface{}, error) {
-	// fmt.Printf("Eval(%v) to %v\n", expr, ty)
+	fmt.Printf("Eval(%v) to %v\n", expr, ty)
 	switch ty.Kind() {
 	// An array is a `for i:=0i<n;i++ { ... }`
 	case reflect.Array:
@@ -146,7 +159,16 @@ func EvalType(ev *Evaluator, expr, ifExpr Expression, ty reflect.Type, depth int
 		if err != nil {
 			return nil, err
 		}
-		if test.(bool) {
+		var cond bool
+		switch reflect.TypeOf(test).Kind() {
+		case reflect.Bool:
+			cond = test.(bool)
+		case reflect.Ptr:
+			cond = test != nil
+		default:
+			return nil, fmt.Errorf("invalid type %v for condition - must be bool or pointer", reflect.TypeOf(test))
+		}
+		if cond {
 			v, err = EvalType(ev, expr, nil, ty.Elem(), depth+1)
 			if err != nil {
 				return nil, err
@@ -200,6 +222,15 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 
 		x := reflect.ValueOf(v)
 		Set(val.Field(i), x)
+		if x.Kind() == reflect.Ptr {
+			if x.IsNil() {
+				fmt.Printf("%s.%s = nil\n", ty.Name(), field.Name)
+			} else {
+				fmt.Printf("%s.%s = &%v\n", ty.Name(), field.Name, x.Elem().Interface())
+			}
+		} else {
+			fmt.Printf("%s.%s = %v\n", ty.Name(), field.Name, v)
+		}
 	}
 	return val.Interface(), nil
 }
