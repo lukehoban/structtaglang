@@ -58,10 +58,10 @@ type Ray struct {
 	Dir   Vector `λ:"_1.X,_1.Y,_1.Z"`
 }
 
-// // TraceRay(scene, ray, depth)
-// type TraceRay struct {
-// 	TraceRay *TraceRay `?:"_2<2" λ:"_0,_1,_2+1"`
-// }
+// TraceRay(scene, ray, depth)
+type TraceRay struct {
+	TraceRay *TraceRay `?:"_2>0" λ:"_0,_1,_2-1"`
+}
 
 // TracePixel(camera, x, y)
 type TracePixel struct {
@@ -72,8 +72,8 @@ type TracePixel struct {
 	RightUp        VectorPlus  `λ:"Up,Right"`
 	RightUpForward VectorPlus  `λ:"RightUp,_0.Forward"`
 	Point          VectorNorm  `λ:"RightUpForward"`
-	// Ray            Ray         `λ:"_0.Pos,Ray"`
-	// Color          TraceRay    `λ:"Ray,_0,0"`
+	Ray            Ray         `λ:"_0.Pos,Point"`
+	Color          TraceRay    `λ:"Ray,_0,0"`
 	// TODO: Create ray and trace it
 }
 
@@ -100,11 +100,12 @@ type Main struct {
 	Raytracer Raytracer `λ:"Camera"`
 }
 
-// func TestTraceRay(t *testing.T) {
-// 	res, err := EvalStruct(reflect.TypeOf(TraceRay{}), []interface{}{nil, nil, 0})
-// 	assert.NoError(t, err)
-// 	assert.NotNil(t, res)
-// }
+func TestTraceRay(t *testing.T) {
+	res, err := EvalStruct(reflect.TypeOf(TraceRay{}), []interface{}{nil, nil, 2})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Nil(t, res.(TraceRay).TraceRay.TraceRay.TraceRay)
+}
 
 func TestVectorNorm(t *testing.T) {
 	res, err := EvalStruct(reflect.TypeOf(VectorNorm{}), []interface{}{Vector{1.0, 2.0, 3.0}})

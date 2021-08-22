@@ -147,7 +147,7 @@ func EvalType(ev *Evaluator, expr, ifExpr Expression, ty reflect.Type, depth int
 			return nil, err
 		}
 		if test.(bool) {
-			v, err = ev.Eval(expr)
+			v, err = EvalType(ev, expr, nil, ty.Elem(), depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -220,14 +220,12 @@ func Set(dest reflect.Value, val reflect.Value) {
 			dest.Field(i).Set(structVal.Field(i))
 		}
 	case reflect.Ptr:
-		fmt.Printf("%v,%v\n", dest, val)
-		fmt.Printf("%v,%v\n", dest.Elem(), val.Elem())
-		if !val.IsNil() {
+		if !val.Elem().IsNil() {
 			someVal := reflect.ValueOf(val.Elem().Interface())
-			fmt.Printf("%v\n", someVal)
-			dest.Set(val.Elem())
+			x := reflect.New(dest.Type().Elem())
+			x.Elem().Set(someVal)
+			dest.Set(x)
 		}
-
 	default:
 		panic(fmt.Sprintf("nyi - set %s", dt.Kind()))
 	}
