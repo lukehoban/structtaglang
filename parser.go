@@ -94,7 +94,7 @@ func (p *Parser) ParseBasicExpression() (Expression, error) {
 	}
 	tok := p.Peek(0)
 	switch tok.String {
-	case "+", "%", "*", "-":
+	case "+", "%", "*", "-", "^", "/", "<", ">":
 		p.Skip(1)
 		right, err := p.ParseBasicExpression()
 		if err != nil {

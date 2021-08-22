@@ -83,3 +83,5 @@ type Main struct {
 * Slice types as `map` - something like `Something []int` with `λ:"Colors=>__0[0].R"` which maps a variable `Colors` into a slice of ints.
 * Combination of pointers and slices to filter a map?
 * Array indexing
+* Data paralellism
+* Static analysis and type checking

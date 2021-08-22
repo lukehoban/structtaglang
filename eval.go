@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 )
 
@@ -35,12 +36,31 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 		switch ex.Tok.String {
 		case "%":
 			return left.(int) % right.(int), nil
+		case "<":
+			return floatOrIntBinop("<", left, right, func(x, y int) interface{} { return x < y }, func(x, y float64) interface{} { return x < y })
+		case ">":
+			return floatOrIntBinop(">", left, right, func(x, y int) interface{} { return x > y }, func(x, y float64) interface{} { return x > y })
 		case "+":
 			return floatOrIntBinop("+", left, right, func(x, y int) interface{} { return x + y }, func(x, y float64) interface{} { return x + y })
 		case "*":
 			return floatOrIntBinop("*", left, right, func(x, y int) interface{} { return x * y }, func(x, y float64) interface{} { return x * y })
 		case "-":
 			return floatOrIntBinop("-", left, right, func(x, y int) interface{} { return x - y }, func(x, y float64) interface{} { return x - y })
+		case "/":
+			return floatOrIntBinop("/", left, right, func(x, y int) interface{} {
+				return x / y
+			}, func(x, y float64) interface{} {
+				if y == 0 {
+					return math.Inf(0)
+				}
+				return x / y
+			})
+		case "^":
+			return floatOrIntBinop("^", left, right, func(x, y int) interface{} {
+				return int(math.Pow(float64(x), float64(y)))
+			}, func(x, y float64) interface{} {
+				return math.Pow(x, y)
+			})
 		default:
 			panic(fmt.Sprintf("nyi - operator %s", ex.Tok.String))
 		}
@@ -86,7 +106,7 @@ func floatOrIntBinop(op string, left, right interface{}, fint func(int, int) int
 	panic(fmt.Sprintf("not yet implemented %v %s %v", reflect.TypeOf(left), op, reflect.TypeOf(right)))
 }
 
-func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (interface{}, error) {
+func EvalType(ev *Evaluator, expr, ifExpr Expression, ty reflect.Type, depth int) (interface{}, error) {
 	// fmt.Printf("Eval(%v) to %v\n", expr, ty)
 	switch ty.Kind() {
 	// An array is a `for i:=0i<n;i++ { ... }`
@@ -94,7 +114,7 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 		var ret []interface{}
 		for i := 0; i < ty.Len(); i++ {
 			ev.scope[fmt.Sprintf("__%d", depth)] = i
-			v, err := EvalType(ev, expr, ty.Elem(), depth+1)
+			v, err := EvalType(ev, expr, ifExpr, ty.Elem(), depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -120,6 +140,19 @@ func EvalType(ev *Evaluator, expr Expression, ty reflect.Type, depth int) (inter
 		}
 		i := reflect.ValueOf(v).Convert(ty).Interface()
 		return i, err
+	case reflect.Ptr:
+		var v interface{}
+		test, err := ev.Eval(ifExpr)
+		if err != nil {
+			return nil, err
+		}
+		if test.(bool) {
+			v, err = ev.Eval(expr)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &v, nil
 	default:
 		panic(fmt.Sprintf("nyi - eval type %s", ty.Kind()))
 	}
@@ -135,10 +168,20 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 			// that external struct types can also be used as constructors with positional arguments.
 			tag = fmt.Sprintf("_%d", i)
 		}
-		parser := NewParser(tag, fmt.Sprintf("%s.%s", ty.Name(), field.Name))
+		parser := NewParser(tag, fmt.Sprintf("%s.%s.λ", ty.Name(), field.Name))
 		expr, err := parser.ParseExpression()
 		if err != nil {
 			return nil, err
+		}
+
+		ifTag := field.Tag.Get("?")
+		var ifExpr Expression
+		if ifTag != "" {
+			parser := NewParser(ifTag, fmt.Sprintf("%s.%s.?", ty.Name(), field.Name))
+			ifExpr, err = parser.ParseExpression()
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		ev := NewEvaluator()
@@ -150,7 +193,7 @@ func EvalStruct(ty reflect.Type, args []interface{}) (interface{}, error) {
 		for j := 0; j < i; j++ {
 			ev.scope[ty.Field(j).Name] = val.Field(j).Interface()
 		}
-		v, err := EvalType(ev, expr, field.Type, 0)
+		v, err := EvalType(ev, expr, ifExpr, field.Type, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -176,6 +219,15 @@ func Set(dest reflect.Value, val reflect.Value) {
 		for i := 0; i < dt.NumField(); i++ {
 			dest.Field(i).Set(structVal.Field(i))
 		}
+	case reflect.Ptr:
+		fmt.Printf("%v,%v\n", dest, val)
+		fmt.Printf("%v,%v\n", dest.Elem(), val.Elem())
+		if !val.IsNil() {
+			someVal := reflect.ValueOf(val.Elem().Interface())
+			fmt.Printf("%v\n", someVal)
+			dest.Set(val.Elem())
+		}
+
 	default:
 		panic(fmt.Sprintf("nyi - set %s", dt.Kind()))
 	}
