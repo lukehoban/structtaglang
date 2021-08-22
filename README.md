@@ -1,4 +1,4 @@
-## Tag Language
+# Tag Language
 
 A language embedded in Go struct tags. 
 
@@ -12,7 +12,10 @@ The following analogies generally explain how Tag works:
 * Fields are local variables
 * Field types are statements, control flow and function calls
 * Struct field tags are expressions in a made up new expression language
-This program:
+
+## Simple Example
+
+Here's a simple program:
 
 ```go
 type Color struct {
@@ -27,9 +30,11 @@ type Image struct {
 }
 ```
 
-Renders this image:
+It renders this image:
 
 ![rainbow](image.png)
+
+## Conditionals and Recursion
 
 Pointers are conditionals, and can be used to create recursion!
 
@@ -39,7 +44,13 @@ type TraceRay struct {
 }
 ```
 
-Goal is to be able to write a raytracer in this "language".  The following early subset is a larger program that is working so far:
+## Memory, Stack and Execution History
+
+The language has no stack frame unwinding or GC, so all local variables ever allocated are stored forever on the heap! :-).  This is interesting, because it means once a program completes, the returned result value is a full execution trace.  For example, the test that validates the behaviour of `TraceRay` above is able to validate it after the fact via `assert.Nil(t, res.(TraceRay).TraceRay.TraceRay.TraceRay)` - verifying that there were indeed 3 layers of recusrive calls made, and that the last was `nil`.
+
+## RayTracer Example
+
+The current goal is to be able to write a raytracer in this "language".  The following early subset is a larger program that is working so far (though still missing some major pieces to implement the full raytracer!):
 
 ```go
 // Vector(x, y, z)
@@ -57,6 +68,11 @@ type VectorTimes struct {
 // VectorPlus(v1, v2)
 type VectorPlus struct {
 	Vector `λ:"_0.X+_1.X,_0.Y+_1.Y,_0.Z+_1.Z"`
+}
+
+// VectorMinus(v1, v2)
+type VectorMinus struct {
+	Vector `λ:"_0.X-_1.X,_0.Y-_1.Y,_0.Z-_1.Z"`
 }
 
 // VectorDot(v1, v2)
@@ -77,9 +93,30 @@ type Ray struct {
 	Dir   Vector `λ:"_1.X,_1.Y,_1.Z"`
 }
 
+// IntersectSphereDist(radius, eo, v)
+type IntersectSphereDist struct {
+	EODotEO VectorDot `λ:"_1,_1"`
+	Disc    float64   `λ:"(_0^2)-(EODotEO.Value-_2^2)"`
+	Value   *float64  `?:"0<Disc" λ:"_2-(Disc^0.5)"`
+}
+
+// IntersectSphere(ray)
+type IntersectSphere struct {
+	Center Vector               `λ:"0,0,0"`
+	Radius float64              `λ:"1"`
+	EO     VectorMinus          `λ:"Center,_0.Start"`
+	V      VectorDot            `λ:"EO,_0.Dir"`
+	VDist  *IntersectSphereDist `?:"0<V.Value" λ:"Radius,EO,V.Value"`
+	Dist0  *float64             `?:"VDist" λ:"VDist.Value?0"`
+	Dist   float64              `λ:"Dist0?0"`
+}
+
 // TraceRay(scene, ray, depth)
 type TraceRay struct {
-	TraceRay *TraceRay `?:"_2>0" λ:"_0,_1,_2-1"`
+	// TODO: Sphere intersection, and then compute color from intersection
+	// Isect    IntersectSphere `λ:"_1"`
+
+	TraceRay *TraceRay `?:"_2>0" λ:"_0,_1,_2-1"` // Recursion!!!
 }
 
 // TracePixel(camera, x, y)
@@ -92,8 +129,7 @@ type TracePixel struct {
 	RightUpForward VectorPlus  `λ:"RightUp,_0.Forward"`
 	Point          VectorNorm  `λ:"RightUpForward"`
 	Ray            Ray         `λ:"_0.Pos,Point"`
-	Color          TraceRay    `λ:"Ray,_0,0"`
-	// TODO: Create ray and trace it
+	Color          TraceRay    `λ:"_0,Ray,0"`
 }
 
 // Raytracer(camera)
@@ -121,9 +157,11 @@ type Main struct {
 ```
 
 ## TODO
-* Pointer types as `if` - something like `Something *int` with `λ:"_0>0=>_0"`
-* Slice types as `map` - something like `Something []int` with `λ:"Colors=>__0[0].R"` which maps a variable `Colors` into a slice of ints.
-* Combination of pointers and slices to filter a map?
-* Array indexing
-* Data paralellism
-* Static analysis and type checking
+
+- [x] Pointer types as `if` - something like `Something *int` with `λ:"_0>0=>_0"`
+- [ ] Slice types as `map` - something like `Something []int` with `λ:"Colors=>__0[0].R"` which maps a variable `Colors` into a slice of ints.
+- [ ] Combination of pointers and slices to filter a map?
+- [x] Null coalescing
+- [ ] Array indexing
+- [ ] Data paralellism
+- [ ] Static analysis and type checking

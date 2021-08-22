@@ -94,6 +94,10 @@ func (ev *Evaluator) Eval(expr Expression) (interface{}, error) {
 			}
 			xval = xval.Elem()
 		}
+		propVal := xval.FieldByName(ex.Property.String)
+		if !propVal.IsValid() {
+			return nil, fmt.Errorf("no field %s on value %v", ex.Property.String, xval)
+		}
 		return xval.FieldByName(ex.Property.String).Interface(), nil
 	case *Call:
 		panic("nyi - eval call")

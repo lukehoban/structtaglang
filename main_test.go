@@ -83,8 +83,10 @@ type IntersectSphere struct {
 
 // TraceRay(scene, ray, depth)
 type TraceRay struct {
-	Isect    IntersectSphere `λ:"_1"`
-	TraceRay *TraceRay       `?:"_2>0" λ:"_0,_1,_2-1"` // Recursion!!!
+	// TODO: Sphere intersection, and then compute color from intersection
+	// Isect    IntersectSphere `λ:"_1"`
+
+	TraceRay *TraceRay `?:"_2>0" λ:"_0,_1,_2-1"` // Recursion!!!
 }
 
 // TracePixel(camera, x, y)
@@ -97,7 +99,7 @@ type TracePixel struct {
 	RightUpForward VectorPlus  `λ:"RightUp,_0.Forward"`
 	Point          VectorNorm  `λ:"RightUpForward"`
 	Ray            Ray         `λ:"_0.Pos,Point"`
-	Color          TraceRay    `λ:"Ray,_0,0"`
+	Color          TraceRay    `λ:"_0,Ray,0"`
 }
 
 // Raytracer(camera)
@@ -124,6 +126,7 @@ type Main struct {
 }
 
 func TestIntersectSphere(t *testing.T) {
+	t.Parallel()
 	res, err := EvalStruct(reflect.TypeOf(IntersectSphere{}), []interface{}{
 		Ray{
 			Start: Vector{-2, 0, 0},
@@ -136,13 +139,18 @@ func TestIntersectSphere(t *testing.T) {
 }
 
 func TestTraceRay(t *testing.T) {
-	res, err := EvalStruct(reflect.TypeOf(TraceRay{}), []interface{}{nil, nil, 2})
+	t.Parallel()
+	res, err := EvalStruct(reflect.TypeOf(TraceRay{}), []interface{}{nil, Ray{
+		Start: Vector{-2, 0, 0},
+		Dir:   Vector{1, 0, 0},
+	}, 2})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 	assert.Nil(t, res.(TraceRay).TraceRay.TraceRay.TraceRay)
 }
 
 func TestVectorNorm(t *testing.T) {
+	t.Parallel()
 	res, err := EvalStruct(reflect.TypeOf(VectorNorm{}), []interface{}{Vector{1.0, 2.0, 3.0}})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -150,6 +158,7 @@ func TestVectorNorm(t *testing.T) {
 }
 
 func TestRaytracer(t *testing.T) {
+	t.Parallel()
 	res, err := EvalStruct(reflect.TypeOf(Main{}), []interface{}{nil})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
